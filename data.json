@@ -9,7 +9,7 @@
     ],
     "bioShort": "Building immersive digital experiences at the intersection of robust backend systems and gorgeous, high-performance user interfaces.",
     "bioLong": "Hi, I'm Shivanshu. With over 8 years of professional experience, I help companies turn complex technical challenges into pixel-perfect, highly scalable, and accessible web solutions. I specialize in React, Node.js, Cloud Architectures, and motion design. When I'm not coding, I'm mentoring junior developers, speaking at tech meetups, or researching web performance. My philosophy is simple: write clean, self-documenting code, design with absolute focus on user empathy, and never stop learning.",
-    "photoUrl": "https://images.unsplash.com/photo-1534528741775-53994a69daeb?q=80&w=600&auto=format&fit=crop",
+    "photoUrl": "/src/assets/images/shivanshu_user_photo_1783946269786.jpg",
     "resumeUrl": "#",
     "email": "shivanshu@designcode.io",
     "phone": "8126615933",
@@ -465,11 +465,11 @@
       "subject": "Stunning Web Dashboard project",
       "message": "Hi Shivanshu, we saw your high-end performance audits and custom SaaS dashboard. We are looking for a senior developer to build our next telemetry dashboard. Let's sync up this Wednesday!",
       "date": "2026-07-12T14:32:00.000Z",
-      "read": false
+      "read": true
     }
   ],
   "analytics": {
-    "totalVisits": 1441,
+    "totalVisits": 1457,
     "totalMessages": 12,
     "pageViews": {
       "home": 620,
@@ -478,8 +478,8 @@
       "blog": 140,
       "services": 60,
       "contact": 100,
-      "portfolio": 14,
-      "admin": 7
+      "portfolio": 28,
+      "admin": 9
     },
     "messagesByDate": {
       "2026-07-08": 1,
@@ -492,7 +492,7 @@
       "2026-07-10": 135,
       "2026-07-11": 150,
       "2026-07-12": 165,
-      "2026-07-13": 106
+      "2026-07-13": 122
     }
   }
 }

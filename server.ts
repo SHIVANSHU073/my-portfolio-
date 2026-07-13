@@ -35,7 +35,7 @@ function getInitialData(): PortfolioData {
       ],
       bioShort: "Building immersive digital experiences at the intersection of robust backend systems and gorgeous, high-performance user interfaces.",
       bioLong: "Hi, I'm Shivanshu. With over 8 years of professional experience, I help companies turn complex technical challenges into pixel-perfect, highly scalable, and accessible web solutions. I specialize in React, Node.js, Cloud Architectures, and motion design. When I'm not coding, I'm mentoring junior developers, speaking at tech meetups, or researching web performance. My philosophy is simple: write clean, self-documenting code, design with absolute focus on user empathy, and never stop learning.",
-      photoUrl: "https://images.unsplash.com/photo-1534528741775-53994a69daeb?q=80&w=600&auto=format&fit=crop",
+      photoUrl: "/src/assets/images/shivanshu_user_photo_1783946269786.jpg",
       resumeUrl: "#", // Mock download link
       email: "shivanshu@designcode.io",
       phone: "+1 (555) 234-5678",
