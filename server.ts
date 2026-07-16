@@ -9,7 +9,8 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import { createServer as createViteServer } from 'vite';
 import dotenv from 'dotenv';
-import { PortfolioData, Profile, TimelineItem, StatItem, Skill, Project, Service, Certificate, BlogPost, Testimonial, FAQ, ContactMessage, Analytics } from './src/types.js';
+import crypto from 'crypto';
+import { PortfolioData, Profile, TimelineItem, StatItem, Skill, Project, Service, Certificate, BlogPost, Testimonial, FAQ, ContactMessage, Analytics, User } from './src/types.js';
 
 dotenv.config();
 
@@ -377,20 +378,65 @@ function getInitialData(): PortfolioData {
   };
 }
 
+// Password hashing helpers
+function hashPassword(password: string): string {
+  const salt = crypto.randomBytes(16).toString('hex');
+  const hash = crypto.pbkdf2Sync(password, salt, 1000, 64, 'sha512').toString('hex');
+  return `${salt}:${hash}`;
+}
+
+function verifyPassword(password: string, storedHash: string): boolean {
+  if (!storedHash) return false;
+  const parts = storedHash.split(':');
+  if (parts.length !== 2) return false;
+  const [salt, hash] = parts;
+  const verifyHash = crypto.pbkdf2Sync(password, salt, 1000, 64, 'sha512').toString('hex');
+  return hash === verifyHash;
+}
+
 // Load data helper
 function loadData(): PortfolioData {
+  let data: PortfolioData;
   if (!fs.existsSync(DATA_FILE)) {
-    const initial = getInitialData();
-    fs.writeFileSync(DATA_FILE, JSON.stringify(initial, null, 2), 'utf-8');
-    return initial;
+    data = getInitialData();
+  } else {
+    try {
+      const raw = fs.readFileSync(DATA_FILE, 'utf-8');
+      data = JSON.parse(raw) as PortfolioData;
+    } catch (err) {
+      console.error("Error reading data.json. Bootstrapping initial.", err);
+      data = getInitialData();
+    }
   }
-  try {
-    const raw = fs.readFileSync(DATA_FILE, 'utf-8');
-    return JSON.parse(raw) as PortfolioData;
-  } catch (err) {
-    console.error("Error reading data.json. Bootstrapping initial.", err);
-    return getInitialData();
+
+  // Seed default Super Admin and Test User if they don't exist
+  if (!data.users || data.users.length === 0) {
+    const adminEmail = process.env.ADMIN_EMAIL || 'admin@example.com';
+    const adminPass = process.env.ADMIN_PASSWORD || 'Admin@12345';
+    const testEmail = process.env.TEST_USER_EMAIL || 'test@example.com';
+    const testPass = process.env.TEST_USER_PASSWORD || 'Test@12345';
+
+    data.users = [
+      {
+        id: 'usr-admin',
+        email: adminEmail,
+        passwordHash: hashPassword(adminPass),
+        role: 'Super Admin',
+        name: 'System Admin'
+      },
+      {
+        id: 'usr-test',
+        email: testEmail,
+        passwordHash: hashPassword(testPass),
+        role: 'Test User',
+        name: 'QA Tester'
+      }
+    ];
+    fs.writeFileSync(DATA_FILE, JSON.stringify(data, null, 2), 'utf-8');
+    console.log('[Auth] Seeding completed: Admin and Test User accounts.');
   }
+
+  return data;
 }
 
 // Save data helper
@@ -398,19 +444,55 @@ function saveData(data: PortfolioData) {
   fs.writeFileSync(DATA_FILE, JSON.stringify(data, null, 2), 'utf-8');
 }
 
-// Secure admin authentication middleware
-function authenticateAdmin(req: express.Request, res: express.Response, next: express.NextFunction) {
+// Secure authentication middleware for any registered user (Super Admin or Test User)
+function authenticateUser(req: express.Request, res: express.Response, next: express.NextFunction) {
   const authHeader = req.headers.authorization;
   if (!authHeader || !authHeader.startsWith('Bearer ')) {
     res.status(401).json({ error: 'Unauthorized: Missing or invalid token format' });
     return;
   }
   const token = authHeader.split(' ')[1];
-  if (token !== 'mock-admin-token-rivers-882') {
-    res.status(401).json({ error: 'Unauthorized: Invalid admin credentials' });
+  if (!token) {
+    res.status(401).json({ error: 'Unauthorized: Missing token' });
     return;
   }
+
+  if (token === 'mock-admin-token-rivers-882' || token === 'token-super-admin-legacy') {
+    (req as any).user = { id: 'usr-admin', role: 'Super Admin', email: 'admin@example.com', name: 'System Admin' };
+    next();
+    return;
+  }
+
+  // Parse token: token-<role_slug>-<userId>-<timestamp>
+  const parts = token.split('-');
+  if (parts.length < 4 || parts[0] !== 'token') {
+    res.status(401).json({ error: 'Unauthorized: Invalid token format' });
+    return;
+  }
+
+  const userId = parts[parts.length - 2];
+  const fullData = loadData();
+  const user = (fullData.users || []).find(u => u.id === userId);
+
+  if (!user) {
+    res.status(401).json({ error: 'Unauthorized: Session user not found' });
+    return;
+  }
+
+  (req as any).user = user;
   next();
+}
+
+// Secure admin-only authentication middleware
+function authenticateAdmin(req: express.Request, res: express.Response, next: express.NextFunction) {
+  authenticateUser(req, res, () => {
+    const user = (req as any).user;
+    if (!user || user.role !== 'Super Admin') {
+      res.status(403).json({ error: 'Forbidden: Super Admin privileges required' });
+      return;
+    }
+    next();
+  });
 }
 
 // PUBLIC API: Get Portfolio Data
@@ -505,22 +587,192 @@ app.post('/api/portfolio/blogs/:id/view', (req, res) => {
 app.post('/api/admin/login', (req, res) => {
   const { username, password } = req.body;
   
-  // Default values
-  const defaultUser = process.env.ADMIN_USER || 'admin';
-  const defaultPass = process.env.ADMIN_PASS || 'admin123';
+  if (!username || !password) {
+    res.status(400).json({ error: 'Username/Email and password are required.' });
+    return;
+  }
 
-  if (username === defaultUser && password === defaultPass) {
+  const fullData = loadData();
+  const users = fullData.users || [];
+
+  // Match username/email
+  const user = users.find(u => 
+    u.email.toLowerCase() === username.toLowerCase() || 
+    u.email.split('@')[0].toLowerCase() === username.toLowerCase()
+  );
+
+  if (user && verifyPassword(password, user.passwordHash)) {
+    // Generate token: token-<role_slug>-<userId>-<timestamp>
+    const roleSlug = user.role.toLowerCase().replace(/\s+/g, '-');
+    const token = `token-${roleSlug}-${user.id}-${Date.now()}`;
+    
     res.json({ 
       success: true, 
-      token: 'mock-admin-token-rivers-882',
+      token,
       profile: {
-        username: 'admin',
-        role: 'Administrator'
+        username: user.name,
+        email: user.email,
+        role: user.role
       }
     });
   } else {
-    res.status(401).json({ error: 'Invalid username or password' });
+    // Legacy fallback
+    const defaultUser = process.env.ADMIN_USER || 'admin';
+    const defaultPass = process.env.ADMIN_PASS || 'admin123';
+
+    if (username === defaultUser && password === defaultPass) {
+      res.json({ 
+        success: true, 
+        token: 'token-super-admin-legacy',
+        profile: {
+          username: 'Admin',
+          email: 'admin@example.com',
+          role: 'Super Admin'
+        }
+      });
+    } else {
+      res.status(401).json({ error: 'Invalid username/email or password.' });
+    }
   }
+});
+
+// Fetch logged-in user profile details (Self)
+app.get('/api/admin/me', authenticateUser, (req, res) => {
+  const user = (req as any).user;
+  res.json({
+    id: user.id,
+    email: user.email,
+    role: user.role,
+    name: user.name
+  });
+});
+
+// ADMIN API: USERS Management - Fetch all user accounts (Super Admin only)
+app.get('/api/admin/users', authenticateAdmin, (req, res) => {
+  const fullData = loadData();
+  const safeUsers = (fullData.users || []).map(u => ({
+    id: u.id,
+    email: u.email,
+    role: u.role,
+    name: u.name
+  }));
+  res.json(safeUsers);
+});
+
+// ADMIN API: USERS Management - Create a new user (Super Admin only)
+app.post('/api/admin/users', authenticateAdmin, (req, res) => {
+  const { email, password, role, name } = req.body;
+  if (!email || !password || !role || !name) {
+    res.status(400).json({ error: 'All fields (email, password, role, name) are required.' });
+    return;
+  }
+
+  const fullData = loadData();
+  if (!fullData.users) fullData.users = [];
+
+  if (fullData.users.some(u => u.email.toLowerCase() === email.toLowerCase())) {
+    res.status(400).json({ error: 'A user with this email already exists.' });
+    return;
+  }
+
+  const newUser: User = {
+    id: `usr-${Date.now()}`,
+    email,
+    passwordHash: hashPassword(password),
+    role,
+    name
+  };
+
+  fullData.users.push(newUser);
+  saveData(fullData);
+
+  res.json({
+    success: true,
+    data: {
+      id: newUser.id,
+      email: newUser.email,
+      role: newUser.role,
+      name: newUser.name
+    }
+  });
+});
+
+// ADMIN API: USERS Management - Edit a user (Super Admin can edit anyone, Test User can only edit themselves, role cannot be edited by Test User)
+app.put('/api/admin/users/:id', authenticateUser, (req, res) => {
+  const { id } = req.params;
+  const { email, password, previousPassword, role, name } = req.body;
+  const currentUser = (req as any).user;
+
+  if (currentUser.role !== 'Super Admin' && currentUser.id !== id) {
+    res.status(403).json({ error: 'Forbidden: You can only edit your own profile.' });
+    return;
+  }
+
+  const fullData = loadData();
+  const users = fullData.users || [];
+  const idx = users.findIndex(u => u.id === id);
+
+  if (idx === -1) {
+    res.status(404).json({ error: 'User not found.' });
+    return;
+  }
+
+  if (email && users.some((u, i) => i !== idx && u.email.toLowerCase() === email.toLowerCase())) {
+    res.status(400).json({ error: 'A user with this email already exists.' });
+    return;
+  }
+
+  // If a password change is requested by the account owner, verify previous password
+  if (password && currentUser.id === id) {
+    if (!previousPassword) {
+      res.status(400).json({ error: 'Previous password is required to set a new password.' });
+      return;
+    }
+    if (!verifyPassword(previousPassword, users[idx].passwordHash)) {
+      res.status(400).json({ error: 'Incorrect previous password.' });
+      return;
+    }
+  }
+
+  if (name) users[idx].name = name;
+  if (email) users[idx].email = email;
+  if (password) users[idx].passwordHash = hashPassword(password);
+  
+  if (role && currentUser.role === 'Super Admin') {
+    users[idx].role = role;
+  }
+
+  saveData(fullData);
+
+  res.json({
+    success: true,
+    data: {
+      id: users[idx].id,
+      email: users[idx].email,
+      role: users[idx].role,
+      name: users[idx].name
+    }
+  });
+});
+
+// ADMIN API: USERS Management - Delete a user (Super Admin only, allowed to delete any user)
+app.delete('/api/admin/users/:id', authenticateAdmin, (req, res) => {
+  const { id } = req.params;
+  const currentUser = (req as any).user;
+
+  const fullData = loadData();
+  const users = fullData.users || [];
+  const idx = users.findIndex(u => u.id === id);
+
+  if (idx === -1) {
+    res.status(404).json({ error: 'User not found.' });
+    return;
+  }
+
+  fullData.users = users.filter(u => u.id !== id);
+  saveData(fullData);
+
+  res.json({ success: true });
 });
 
 // ADMIN API: Fetch complete data including messages and analytics

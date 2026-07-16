@@ -20,6 +20,7 @@ import AdminLogin from './components/AdminLogin.js';
 import AdminDashboard from './components/AdminDashboard.js';
 import { PortfolioData } from './types.js';
 import { LanguageCode } from './data/translations.js';
+import { Lock, ShieldAlert, ArrowLeft } from 'lucide-react';
 
 export default function App() {
   const [currentLang, setCurrentLang] = useState<LanguageCode>('en');
@@ -28,6 +29,13 @@ export default function App() {
   const [adminToken, setAdminToken] = useState<string | null>(null);
   const [portfolioData, setPortfolioData] = useState<PortfolioData | null>(null);
   const [loading, setLoading] = useState(true);
+
+  // Gateway Protection State (Code: 123456)
+  const [gatewayUnlocked, setGatewayUnlocked] = useState<boolean>(() => {
+    return sessionStorage.getItem('shivanshu-gateway-unlocked') === 'true';
+  });
+  const [gatewayPassword, setGatewayPassword] = useState('');
+  const [gatewayError, setGatewayError] = useState('');
 
   // Initialize Theme and Admin Session on Mount
   useEffect(() => {
@@ -189,8 +197,77 @@ export default function App() {
 
       <div className="relative z-10">
         {currentView === 'admin' ? (
-          /* ADMIN WORKSPACE VIEW */
-          adminToken ? (
+          /* ADMIN WORKSPACE VIEW WITH GATEWAY PROTECTION */
+          !gatewayUnlocked ? (
+            <div className="min-h-[calc(100vh-80px)] pt-28 pb-16 px-4 flex flex-col items-center justify-center animate-fade-in">
+              <div className="w-full max-w-md p-8 sm:p-10 rounded-3xl bg-white dark:bg-slate-900 border border-slate-200/50 dark:border-slate-800/80 shadow-xl space-y-6 text-center relative overflow-hidden">
+                <div className="absolute top-0 left-0 w-full h-1.5 bg-gradient-to-r from-amber-500 to-rose-500" />
+                
+                <div className="inline-flex p-4 rounded-2xl bg-amber-50 dark:bg-amber-950/20 text-amber-500 dark:text-amber-400 ring-4 ring-amber-500/10 mx-auto">
+                  <Lock size={32} />
+                </div>
+
+                <div className="space-y-2">
+                  <h2 className="text-xl font-display font-extrabold tracking-tight text-slate-900 dark:text-white">
+                    Admin Gateway Protection
+                  </h2>
+                  <p className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed max-w-xs mx-auto">
+                    This workspace area is restricted. Please enter the security gateway access key to continue.
+                  </p>
+                </div>
+
+                <form
+                  onSubmit={(e) => {
+                    e.preventDefault();
+                    if (gatewayPassword === '123456') {
+                      setGatewayUnlocked(true);
+                      sessionStorage.setItem('shivanshu-gateway-unlocked', 'true');
+                      setGatewayError('');
+                    } else {
+                      setGatewayError('Incorrect gateway access key. Please try again.');
+                    }
+                  }}
+                  className="space-y-4 text-left"
+                >
+                  <div className="space-y-1.5">
+                    <label className="text-[10px] font-mono font-bold uppercase tracking-wider text-slate-400">Gateway Access Key</label>
+                    <input
+                      type="password"
+                      required
+                      value={gatewayPassword}
+                      onChange={(e) => setGatewayPassword(e.target.value)}
+                      placeholder="••••••"
+                      className="w-full px-4 py-3 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 text-sm text-center font-mono tracking-widest text-slate-900 dark:text-white focus:outline-none focus:border-amber-500 transition-colors"
+                    />
+                  </div>
+
+                  {gatewayError && (
+                    <div className="flex items-center space-x-2 p-3 rounded-xl bg-rose-50 dark:bg-rose-950/20 text-rose-600 dark:text-rose-400 text-xs">
+                      <ShieldAlert size={16} className="shrink-0" />
+                      <span>{gatewayError}</span>
+                    </div>
+                  )}
+
+                  <button
+                    type="submit"
+                    className="w-full py-3 px-4 rounded-xl bg-gradient-to-r from-amber-500 to-rose-500 hover:from-amber-600 hover:to-rose-600 text-white font-bold text-xs uppercase tracking-wider transition-all shadow-md active:scale-95 cursor-pointer"
+                  >
+                    Unlock Gateway
+                  </button>
+                </form>
+
+                <div className="pt-2 border-t border-slate-150 dark:border-slate-800">
+                  <button
+                    onClick={() => setCurrentView('portfolio')}
+                    className="inline-flex items-center space-x-1.5 text-xs text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors cursor-pointer"
+                  >
+                    <ArrowLeft size={14} />
+                    <span>Back to Portfolio</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+          ) : adminToken ? (
             <AdminDashboard
               token={adminToken}
               onBackToPortfolio={() => setCurrentView('portfolio')}

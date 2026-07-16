@@ -35,11 +35,20 @@ interface AdminDashboardProps {
 }
 
 export default function AdminDashboard({ token, onBackToPortfolio, onRefreshData }: AdminDashboardProps) {
-  const [activeTab, setActiveTab] = useState<'analytics' | 'profile' | 'projects' | 'skills' | 'blogs' | 'certificates' | 'messages'>('analytics');
+  const [activeTab, setActiveTab] = useState<'analytics' | 'profile' | 'projects' | 'skills' | 'blogs' | 'certificates' | 'messages' | 'users' | 'my-profile'>('analytics');
   const [data, setData] = useState<PortfolioData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [successMsg, setSuccessMsg] = useState('');
+
+  // Current logged in user & list of system users
+  const [currentUser, setCurrentUser] = useState<{ id: string; email: string; name: string; role: string } | null>(null);
+  const [usersList, setUsersList] = useState<{ id: string; email: string; name: string; role: string }[]>([]);
+
+  // User accounts forms
+  const [showAddUserForm, setShowAddUserForm] = useState(false);
+  const [userForm, setUserForm] = useState({ name: '', email: '', password: '', role: 'Test User' as 'Super Admin' | 'Test User' });
+  const [editingUser, setEditingUser] = useState<{ id: string; name: string; email: string; password?: string; role: 'Super Admin' | 'Test User' } | null>(null);
 
   // Form states
   const [profileForm, setProfileForm] = useState<Profile | null>(null);
@@ -58,17 +67,49 @@ export default function AdminDashboard({ token, onBackToPortfolio, onRefreshData
   const fetchAdminData = async () => {
     setLoading(true);
     try {
-      const response = await fetch('/api/admin/data', {
+      // 1. Fetch current user role
+      const meRes = await fetch('/api/admin/me', {
         headers: {
           'Authorization': `Bearer ${token}`
         }
       });
-      if (response.ok) {
-        const payload = await response.json();
-        setData(payload);
-        setProfileForm(payload.profile);
-      } else {
+      if (!meRes.ok) {
         setError('Authentication session expired. Please re-authenticate.');
+        setLoading(false);
+        return;
+      }
+      const userPayload = await meRes.json();
+      setCurrentUser(userPayload);
+
+      if (userPayload.role === 'Super Admin') {
+        // 2. Fetch admin full portfolio dataset
+        const response = await fetch('/api/admin/data', {
+          headers: {
+            'Authorization': `Bearer ${token}`
+          }
+        });
+        if (response.ok) {
+          const payload = await response.json();
+          setData(payload);
+          setProfileForm(payload.profile);
+        } else {
+          setError('Failed to fetch admin portfolio settings.');
+        }
+
+        // 3. Fetch all system users for management tab
+        const usersRes = await fetch('/api/admin/users', {
+          headers: {
+            'Authorization': `Bearer ${token}`
+          }
+        });
+        if (usersRes.ok) {
+          const usersPayload = await usersRes.json();
+          setUsersList(usersPayload);
+        }
+        setActiveTab('analytics');
+      } else {
+        // Test User is locked to my-profile
+        setActiveTab('my-profile');
       }
     } catch (err) {
       setError('Connection to Express database failed.');
@@ -80,6 +121,82 @@ export default function AdminDashboard({ token, onBackToPortfolio, onRefreshData
   useEffect(() => {
     fetchAdminData();
   }, [token]);
+
+  const handleCreateUser = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      const res = await fetch('/api/admin/users', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify(userForm)
+      });
+      const resData = await res.json();
+      if (res.ok) {
+        showToast(`User ${userForm.name} created successfully.`);
+        setUserForm({ name: '', email: '', password: '', role: 'Test User' });
+        setShowAddUserForm(false);
+        fetchAdminData();
+      } else {
+        setError(resData.error || 'Failed to create user.');
+      }
+    } catch (err) {
+      setError('Error creating user.');
+    }
+  };
+
+  const handleUpdateUser = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingUser) return;
+    try {
+      const res = await fetch(`/api/admin/users/${editingUser.id}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          name: editingUser.name,
+          email: editingUser.email,
+          password: editingUser.password || undefined,
+          role: editingUser.role
+        })
+      });
+      const resData = await res.json();
+      if (res.ok) {
+        showToast(`Account updated successfully.`);
+        setEditingUser(null);
+        fetchAdminData();
+      } else {
+        setError(resData.error || 'Failed to update user.');
+      }
+    } catch (err) {
+      setError('Error updating user.');
+    }
+  };
+
+  const handleDeleteUser = async (id: string) => {
+    if (!window.confirm('Are you sure you want to delete this user account?')) return;
+    try {
+      const res = await fetch(`/api/admin/users/${id}`, {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+      const resData = await res.json();
+      if (res.ok) {
+        showToast(`User account deleted.`);
+        fetchAdminData();
+      } else {
+        setError(resData.error || 'Failed to delete user.');
+      }
+    } catch (err) {
+      setError('Error deleting user.');
+    }
+  };
 
   const showToast = (msg: string) => {
     setSuccessMsg(msg);
@@ -242,46 +359,406 @@ export default function AdminDashboard({ token, onBackToPortfolio, onRefreshData
           
           {/* Sidebar Menu */}
           <div className="lg:col-span-3 space-y-2">
-            {[
-              { id: 'analytics', label: 'Analytics', icon: LayoutDashboard },
-              { id: 'profile', label: 'Edit Profile', icon: User },
-              { id: 'projects', label: 'Manage Projects', icon: FolderKanban },
-              { id: 'skills', label: 'Manage Skills', icon: Code2 },
-              { id: 'blogs', label: 'Manage Blogs', icon: BookOpen },
-              { id: 'certificates', label: 'Certificates', icon: Award },
-              { id: 'messages', label: `Messages (${unreadCount})`, icon: Mail, highlight: unreadCount > 0 }
-            ].map((tab) => {
-              const TabIcon = tab.icon;
-              const isActive = activeTab === tab.id;
+            {currentUser?.role === 'Super Admin' ? (
+              [
+                { id: 'analytics', label: 'Analytics', icon: LayoutDashboard },
+                { id: 'users', label: 'Manage Users', icon: UserCheck2 },
+                { id: 'profile', label: 'Edit Profile', icon: User },
+                { id: 'projects', label: 'Manage Projects', icon: FolderKanban },
+                { id: 'skills', label: 'Manage Skills', icon: Code2 },
+                { id: 'blogs', label: 'Manage Blogs', icon: BookOpen },
+                { id: 'certificates', label: 'Certificates', icon: Award },
+                { id: 'messages', label: `Messages (${unreadCount})`, icon: Mail, highlight: unreadCount > 0 }
+              ].map((tab) => {
+                const TabIcon = tab.icon;
+                const isActive = activeTab === tab.id;
 
-              return (
+                return (
+                  <button
+                    key={tab.id}
+                    onClick={() => {
+                      setActiveTab(tab.id as any);
+                      setShowAddForm(null);
+                      setEditingItem(null);
+                    }}
+                    className={`w-full flex items-center justify-between p-3.5 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
+                      isActive
+                        ? 'bg-indigo-600 text-white shadow-md'
+                        : tab.highlight
+                        ? 'bg-rose-50 dark:bg-rose-950/30 text-rose-600 dark:text-rose-400 hover:bg-rose-100/50'
+                        : 'bg-white dark:bg-slate-900 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-400'
+                    }`}
+                  >
+                    <div className="flex items-center space-x-3">
+                      <TabIcon size={16} />
+                      <span>{tab.label}</span>
+                    </div>
+                  </button>
+                );
+              })
+            ) : (
+              <div className="space-y-2">
                 <button
-                  key={tab.id}
-                  onClick={() => {
-                    setActiveTab(tab.id as any);
-                    setShowAddForm(null);
-                    setEditingItem(null);
-                  }}
-                  className={`w-full flex items-center justify-between p-3.5 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
-                    isActive
+                  onClick={() => setActiveTab('my-profile')}
+                  className={`w-full flex items-center space-x-3 p-3.5 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
+                    activeTab === 'my-profile'
                       ? 'bg-indigo-600 text-white shadow-md'
-                      : tab.highlight
-                      ? 'bg-rose-50 dark:bg-rose-950/30 text-rose-600 dark:text-rose-400 hover:bg-rose-100/50'
                       : 'bg-white dark:bg-slate-900 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-400'
                   }`}
                 >
-                  <div className="flex items-center space-x-3">
-                    <TabIcon size={16} />
-                    <span>{tab.label}</span>
-                  </div>
+                  <User size={16} />
+                  <span>My Profile</span>
                 </button>
-              );
-            })}
+                <div className="p-4 rounded-2xl bg-indigo-50/50 dark:bg-indigo-950/15 border border-indigo-100 dark:border-indigo-900/30 text-center space-y-2">
+                  <div className="inline-flex p-2 rounded-xl bg-indigo-100 dark:bg-indigo-900/60 text-indigo-600 dark:text-indigo-400">
+                    <UserCheck2 size={16} />
+                  </div>
+                  <h3 className="text-xs font-bold text-indigo-900 dark:text-indigo-300">Test Workspace</h3>
+                  <p className="text-[10px] text-slate-400 leading-relaxed">
+                    Logged in as <strong>Test User</strong>. You may edit your own credentials and test submit features. Admin dashboard settings are hidden.
+                  </p>
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Main Area */}
           <div className="lg:col-span-9 bg-white dark:bg-slate-900 border border-slate-200/50 dark:border-slate-800/80 rounded-3xl p-6 sm:p-8 shadow-sm">
             
+            {/* USERS MANAGEMENT PANEL (Super Admin Only) */}
+            {activeTab === 'users' && currentUser?.role === 'Super Admin' && (
+              <div className="space-y-8 animate-fade-in">
+                <div className="flex items-center justify-between">
+                  <h2 className="text-lg sm:text-xl font-display font-extrabold flex items-center space-x-2">
+                    <UserCheck2 size={20} className="text-indigo-500" />
+                    <span>System User Accounts</span>
+                  </h2>
+                  {!showAddUserForm && !editingUser && (
+                    <button
+                      onClick={() => setShowAddUserForm(true)}
+                      className="inline-flex items-center space-x-1.5 px-3 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-semibold text-xs transition-all cursor-pointer shadow-sm active:scale-95"
+                    >
+                      <Plus size={14} />
+                      <span>Add Account</span>
+                    </button>
+                  )}
+                </div>
+
+                {/* Add User Form */}
+                {showAddUserForm && (
+                  <form onSubmit={handleCreateUser} className="p-6 rounded-2xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 space-y-4">
+                    <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3">
+                      <h3 className="text-xs font-mono font-bold uppercase tracking-wider text-slate-500">// Add Development/Testing User</h3>
+                      <button type="button" onClick={() => setShowAddUserForm(false)} className="p-1 hover:bg-slate-200 dark:hover:bg-slate-800 rounded">
+                        <X size={14} />
+                      </button>
+                    </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      <div className="space-y-1.5">
+                        <label className="text-[10px] font-mono font-bold uppercase tracking-wider text-slate-400">Full Name</label>
+                        <input
+                          type="text"
+                          required
+                          value={userForm.name}
+                          onChange={e => setUserForm({ ...userForm, name: e.target.value })}
+                          className="w-full px-3 py-2 rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-xs text-slate-900 dark:text-white focus:outline-none focus:border-indigo-500 bg-slate-50 dark:bg-slate-950"
+                        />
+                      </div>
+                      <div className="space-y-1.5">
+                        <label className="text-[10px] font-mono font-bold uppercase tracking-wider text-slate-400">Email Address</label>
+                        <input
+                          type="email"
+                          required
+                          value={userForm.email}
+                          onChange={e => setUserForm({ ...userForm, email: e.target.value })}
+                          className="w-full px-3 py-2 rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-xs text-slate-900 dark:text-white focus:outline-none focus:border-indigo-500 bg-slate-50 dark:bg-slate-950"
+                        />
+                      </div>
+                      <div className="space-y-1.5">
+                        <label className="text-[10px] font-mono font-bold uppercase tracking-wider text-slate-400">Password</label>
+                        <input
+                          type="password"
+                          required
+                          value={userForm.password}
+                          onChange={e => setUserForm({ ...userForm, password: e.target.value })}
+                          className="w-full px-3 py-2 rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-xs text-slate-900 dark:text-white focus:outline-none focus:border-indigo-500 bg-slate-50 dark:bg-slate-950"
+                        />
+                      </div>
+                      <div className="space-y-1.5">
+                        <label className="text-[10px] font-mono font-bold uppercase tracking-wider text-slate-400">Role</label>
+                        <select
+                          value={userForm.role}
+                          onChange={e => setUserForm({ ...userForm, role: e.target.value as any })}
+                          className="w-full px-3 py-2 rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-xs text-slate-900 dark:text-white focus:outline-none focus:border-indigo-500 bg-slate-50 dark:bg-slate-950"
+                        >
+                          <option value="Super Admin">Super Admin</option>
+                          <option value="Test User">Test User</option>
+                        </select>
+                      </div>
+                    </div>
+                    <div className="flex justify-end space-x-2 pt-2 border-t border-slate-100 dark:border-slate-800">
+                      <button type="button" onClick={() => setShowAddUserForm(false)} className="px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-800 text-xs text-slate-700 dark:text-slate-300">Cancel</button>
+                      <button type="submit" className="px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white font-semibold text-xs">Create User</button>
+                    </div>
+                  </form>
+                )}
+
+                {/* Edit User Form */}
+                {editingUser && (
+                  <form onSubmit={handleUpdateUser} className="p-6 rounded-2xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 space-y-4">
+                    <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3">
+                      <h3 className="text-xs font-mono font-bold uppercase tracking-wider text-slate-500">// Edit User: {editingUser.name}</h3>
+                      <button type="button" onClick={() => setEditingUser(null)} className="p-1 hover:bg-slate-200 dark:hover:bg-slate-800 rounded">
+                        <X size={14} />
+                      </button>
+                    </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      <div className="space-y-1.5">
+                        <label className="text-[10px] font-mono font-bold uppercase tracking-wider text-slate-400">Full Name</label>
+                        <input
+                          type="text"
+                          required
+                          value={editingUser.name}
+                          onChange={e => setEditingUser({ ...editingUser, name: e.target.value })}
+                          className="w-full px-3 py-2 rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-xs text-slate-900 dark:text-white focus:outline-none focus:border-indigo-500 bg-slate-50 dark:bg-slate-950"
+                        />
+                      </div>
+                      <div className="space-y-1.5">
+                        <label className="text-[10px] font-mono font-bold uppercase tracking-wider text-slate-400">Email Address</label>
+                        <input
+                          type="email"
+                          required
+                          value={editingUser.email}
+                          onChange={e => setEditingUser({ ...editingUser, email: e.target.value })}
+                          className="w-full px-3 py-2 rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-xs text-slate-900 dark:text-white focus:outline-none focus:border-indigo-500 bg-slate-50 dark:bg-slate-950"
+                        />
+                      </div>
+                      <div className="space-y-1.5">
+                        <label className="text-[10px] font-mono font-bold uppercase tracking-wider text-slate-400">Update Password (leave blank to keep current)</label>
+                        <input
+                          type="password"
+                          value={editingUser.password || ''}
+                          onChange={e => setEditingUser({ ...editingUser, password: e.target.value })}
+                          placeholder="••••••••"
+                          className="w-full px-3 py-2 rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-xs text-slate-900 dark:text-white focus:outline-none focus:border-indigo-500 bg-slate-50 dark:bg-slate-950"
+                        />
+                      </div>
+                      <div className="space-y-1.5">
+                        <label className="text-[10px] font-mono font-bold uppercase tracking-wider text-slate-400">Role</label>
+                        <select
+                          value={editingUser.role}
+                          onChange={e => setEditingUser({ ...editingUser, role: e.target.value as any })}
+                          className="w-full px-3 py-2 rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-xs text-slate-900 dark:text-white focus:outline-none focus:border-indigo-500 bg-slate-50 dark:bg-slate-950"
+                        >
+                          <option value="Super Admin">Super Admin</option>
+                          <option value="Test User">Test User</option>
+                        </select>
+                      </div>
+                    </div>
+                    <div className="flex justify-end space-x-2 pt-2 border-t border-slate-100 dark:border-slate-800">
+                      <button type="button" onClick={() => setEditingUser(null)} className="px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-800 text-xs text-slate-700 dark:text-slate-300">Cancel</button>
+                      <button type="submit" className="px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white font-semibold text-xs">Save Updates</button>
+                    </div>
+                  </form>
+                )}
+
+                {/* Users List Table */}
+                <div className="overflow-x-auto border border-slate-150 dark:border-slate-800 rounded-2xl bg-slate-50/30 dark:bg-slate-950/20">
+                  <table className="w-full text-left border-collapse">
+                    <thead>
+                      <tr className="border-b border-slate-200/65 dark:border-slate-800 font-mono text-[9px] uppercase tracking-wider text-slate-400">
+                        <th className="p-4">Name</th>
+                        <th className="p-4">Email</th>
+                        <th className="p-4">Role</th>
+                        <th className="p-4 text-right">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-150 dark:divide-slate-800/60 text-xs">
+                      {usersList.map((usrItem) => (
+                        <tr key={usrItem.id} className="hover:bg-slate-100/40 dark:hover:bg-slate-900/40">
+                          <td className="p-4 font-semibold text-slate-800 dark:text-slate-200">{usrItem.name}</td>
+                          <td className="p-4 text-slate-500 font-mono">{usrItem.email}</td>
+                          <td className="p-4">
+                            <span className={`inline-flex px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                              usrItem.role === 'Super Admin'
+                                ? 'bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-400'
+                                : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400'
+                            }`}>
+                              {usrItem.role}
+                            </span>
+                          </td>
+                          <td className="p-4 text-right space-x-2">
+                            <button
+                              onClick={() => setEditingUser({ ...usrItem, password: '' })}
+                              className="p-1.5 rounded-lg hover:bg-indigo-50 dark:hover:bg-indigo-950/40 text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors cursor-pointer"
+                              title="Edit User"
+                            >
+                              <Edit2 size={14} />
+                            </button>
+                            <button
+                              onClick={() => handleDeleteUser(usrItem.id)}
+                              className="p-1.5 rounded-lg hover:bg-rose-50 dark:hover:bg-rose-950/40 text-slate-400 hover:text-rose-600 dark:hover:text-rose-400 transition-colors cursor-pointer"
+                              title="Delete User"
+                            >
+                              <Trash2 size={14} />
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+
+            {/* MY USER PROFILE PANEL (Self Service - Accessible to All roles) */}
+            {activeTab === 'my-profile' && currentUser && (
+              <div className="space-y-8 animate-fade-in">
+                <div className="flex items-center space-x-2 border-b border-slate-100 dark:border-slate-800 pb-4">
+                  <User size={20} className="text-indigo-500" />
+                  <div>
+                    <h2 className="text-lg sm:text-xl font-display font-extrabold">My User Profile Settings</h2>
+                    <p className="text-[11px] text-slate-400">Manage your credentials and view account permissions.</p>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
+                  {/* Edit Form */}
+                  <div className="lg:col-span-7">
+                    <form
+                      onSubmit={async (e) => {
+                        e.preventDefault();
+                        const pName = (e.currentTarget.elements.namedItem('name') as HTMLInputElement).value;
+                        const pEmail = (e.currentTarget.elements.namedItem('email') as HTMLInputElement).value;
+                        const pPreviousPassword = (e.currentTarget.elements.namedItem('previousPassword') as HTMLInputElement).value;
+                        const pPassword = (e.currentTarget.elements.namedItem('password') as HTMLInputElement).value;
+
+                        if (pPassword && !pPreviousPassword) {
+                          setError('Please enter your previous password to reset your password.');
+                          return;
+                        }
+
+                        try {
+                          const res = await fetch(`/api/admin/users/${currentUser.id}`, {
+                            method: 'PUT',
+                            headers: {
+                              'Content-Type': 'application/json',
+                              'Authorization': `Bearer ${token}`
+                            },
+                            body: JSON.stringify({
+                              name: pName,
+                              email: pEmail,
+                              password: pPassword || undefined,
+                              previousPassword: pPreviousPassword || undefined
+                            })
+                          });
+                          const resData = await res.json();
+                          if (res.ok) {
+                            showToast('Profile updated successfully.');
+                            // Refresh current profile info
+                            const meRes = await fetch('/api/admin/me', {
+                              headers: { 'Authorization': `Bearer ${token}` }
+                            });
+                            if (meRes.ok) {
+                              const userPayload = await meRes.json();
+                              setCurrentUser(userPayload);
+                            }
+                            (e.currentTarget.elements.namedItem('password') as HTMLInputElement).value = '';
+                            (e.currentTarget.elements.namedItem('previousPassword') as HTMLInputElement).value = '';
+                            setError('');
+                          } else {
+                            setError(resData.error || 'Failed to update profile.');
+                          }
+                        } catch (err) {
+                          setError('Connection error.');
+                        }
+                      }}
+                      className="space-y-5"
+                    >
+                      <div className="space-y-1.5">
+                        <label className="text-[10px] font-mono font-bold uppercase tracking-wider text-slate-400">Full Name</label>
+                        <input
+                          type="text"
+                          name="name"
+                          required
+                          defaultValue={currentUser.name}
+                          className="w-full px-4 py-2.5 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 text-xs text-slate-900 dark:text-white focus:outline-none focus:border-indigo-500 transition-colors"
+                        />
+                      </div>
+
+                      <div className="space-y-1.5">
+                        <label className="text-[10px] font-mono font-bold uppercase tracking-wider text-slate-400">Email Address</label>
+                        <input
+                          type="email"
+                          name="email"
+                          required
+                          defaultValue={currentUser.email}
+                          className="w-full px-4 py-2.5 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 text-xs text-slate-900 dark:text-white focus:outline-none focus:border-indigo-500 transition-colors"
+                        />
+                      </div>
+
+                      <div className="p-4 rounded-xl border border-slate-200/60 dark:border-slate-850/60 bg-slate-50/50 dark:bg-slate-950/40 space-y-4">
+                        <p className="font-mono font-bold uppercase tracking-wider text-[9px] text-slate-400 border-b border-slate-100 dark:border-slate-800/80 pb-1.5">// Change Account Password</p>
+                        
+                        <div className="space-y-1.5">
+                          <label className="text-[10px] font-mono font-bold uppercase tracking-wider text-slate-400">Previous (Current) Password</label>
+                          <input
+                            type="password"
+                            name="previousPassword"
+                            placeholder="Enter current password"
+                            className="w-full px-4 py-2.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-xs text-slate-900 dark:text-white focus:outline-none focus:border-indigo-500 transition-colors"
+                          />
+                        </div>
+
+                        <div className="space-y-1.5">
+                          <label className="text-[10px] font-mono font-bold uppercase tracking-wider text-slate-400">New Password</label>
+                          <input
+                            type="password"
+                            name="password"
+                            placeholder="Enter new secure password"
+                            className="w-full px-4 py-2.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-xs text-slate-900 dark:text-white focus:outline-none focus:border-indigo-500 transition-colors"
+                          />
+                        </div>
+                      </div>
+
+                      <button
+                        type="submit"
+                        className="w-full sm:w-auto inline-flex items-center justify-center px-6 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold transition-all shadow active:scale-95 cursor-pointer"
+                      >
+                        Update Account Information
+                      </button>
+                    </form>
+                  </div>
+
+                  {/* Info Sidebar */}
+                  <div className="lg:col-span-5 space-y-4">
+                    <div className="p-5 rounded-2xl bg-slate-50 dark:bg-slate-950 border border-slate-100 dark:border-slate-800 space-y-3">
+                      <h4 className="text-[10px] font-mono font-bold uppercase tracking-wider text-slate-400">// Account Authorization</h4>
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs text-slate-500">Account ID:</span>
+                        <span className="text-xs font-mono font-bold text-slate-700 dark:text-slate-300">{currentUser.id}</span>
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs text-slate-500">Security Group:</span>
+                        <span className="inline-flex px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-400">
+                          {currentUser.role}
+                        </span>
+                      </div>
+                    </div>
+
+                    <div className="p-5 rounded-2xl bg-indigo-50/30 dark:bg-indigo-950/10 border border-indigo-100 dark:border-indigo-900/30 text-[11px] text-slate-500 dark:text-slate-400 leading-relaxed space-y-2">
+                      <p className="font-semibold text-slate-800 dark:text-slate-200">System Role Notice:</p>
+                      {currentUser.role === 'Super Admin' ? (
+                        <p>As a <strong>Super Admin</strong>, you have complete global permissions. You are authorized to manage site profiles, adjust visitor projects/skills/blogs/credentials, read contact inquiries, and create or delete development/testing credentials.</p>
+                      ) : (
+                        <p>As a <strong>Test User</strong>, your permissions are restricted. You are allowed to authenticate, test standard user workflows, change your own email/password details, and submit public form inquiries. Access to analytics, content management, and user systems is restricted.</p>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
             {/* ANALYTICS PANEL */}
             {activeTab === 'analytics' && data && (
               <div className="space-y-8 animate-fade-in">

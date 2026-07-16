@@ -153,12 +153,7 @@ export default function AdminLogin({ currentLang, onLoginSuccess, onBackToPortfo
 
           </form>
 
-          {/* Prompt info */}
-          <div className="p-4 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-100 dark:border-slate-800/80 text-center text-[11px] text-slate-400 space-y-1">
-            <p className="font-semibold uppercase tracking-wider text-[9px] text-slate-400">// Credentials Indicator</p>
-            <p>Username: <strong className="text-indigo-600 dark:text-indigo-400">admin</strong></p>
-            <p>Password: <strong className="text-indigo-600 dark:text-indigo-400">admin123</strong></p>
-          </div>
+
 
         </div>
 

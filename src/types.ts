@@ -140,6 +140,14 @@ export interface Analytics {
   visitsByDate: Record<string, number>; // date string -> count
 }
 
+export interface User {
+  id: string;
+  email: string;
+  passwordHash: string;
+  role: 'Super Admin' | 'Test User';
+  name: string;
+}
+
 export interface PortfolioData {
   profile: Profile;
   timeline: TimelineItem[];
@@ -153,4 +161,5 @@ export interface PortfolioData {
   faqs: FAQ[];
   messages: ContactMessage[];
   analytics: Analytics;
+  users?: User[];
 }
