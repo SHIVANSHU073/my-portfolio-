@@ -9,6 +9,7 @@ export interface Profile {
   bioShort: string;
   bioLong: string;
   photoUrl: string;
+  aboutPhotoUrl?: string;
   resumeUrl: string;
   email: string;
   phone: string;

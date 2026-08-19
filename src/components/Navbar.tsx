@@ -4,7 +4,7 @@
  */
 
 import React, { useState, useEffect } from 'react';
-import { Menu, X, Sun, Moon, Globe, Settings, LogOut, ArrowLeft } from 'lucide-react';
+import { Menu, X, Sun, Moon, Globe, Settings, LogOut, ArrowLeft, LogIn } from 'lucide-react';
 import { translations, LanguageCode } from '../data/translations.js';
 import { animateScrollTo, animateScrollToElement } from '../utils/scroll.js';
 
@@ -168,9 +168,10 @@ export default function Navbar({
           ) : (
             <button
               onClick={() => setView('admin')}
-              className="text-xs font-semibold px-3 py-1.5 rounded-full border border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-900 text-slate-600 dark:text-slate-400 transition-colors cursor-pointer"
+              className="inline-flex items-center space-x-1.5 text-xs font-semibold px-3.5 py-1.5 rounded-full border border-slate-200 dark:border-slate-800 hover:bg-slate-100 dark:hover:bg-slate-900 text-slate-700 dark:text-slate-300 transition-all duration-200 cursor-pointer active:scale-95 shadow-sm"
             >
-              {t.navAdmin}
+              <LogIn size={13} className="text-indigo-600 dark:text-indigo-400" />
+              <span>{t.navAdmin}</span>
             </button>
           )}
 

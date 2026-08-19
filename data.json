@@ -9,7 +9,7 @@
     ],
     "bioShort": "Building immersive digital experiences at the intersection of robust backend systems and gorgeous, high-performance user interfaces.",
     "bioLong": "Hi, I'm Shivanshu. With over 8 years of professional experience, I help companies turn complex technical challenges into pixel-perfect, highly scalable, and accessible web solutions. I specialize in React, Node.js, Cloud Architectures, and motion design. When I'm not coding, I'm mentoring junior developers, speaking at tech meetups, or researching web performance. My philosophy is simple: write clean, self-documenting code, design with absolute focus on user empathy, and never stop learning.",
-    "photoUrl": "/src/assets/images/shivanshu_user_photo_1783946269786.jpg",
+    "photoUrl": "/src/assets/images/about_me_photo_1787119200983.jpg",
     "resumeUrl": "#",
     "email": "shivanshu@designcode.io",
     "phone": "8126615933",
@@ -469,7 +469,7 @@
     }
   ],
   "analytics": {
-    "totalVisits": 1457,
+    "totalVisits": 1467,
     "totalMessages": 12,
     "pageViews": {
       "home": 620,
@@ -478,8 +478,8 @@
       "blog": 140,
       "services": 60,
       "contact": 100,
-      "portfolio": 28,
-      "admin": 9
+      "portfolio": 36,
+      "admin": 11
     },
     "messagesByDate": {
       "2026-07-08": 1,
@@ -492,7 +492,24 @@
       "2026-07-10": 135,
       "2026-07-11": 150,
       "2026-07-12": 165,
-      "2026-07-13": 122
+      "2026-07-13": 122,
+      "2026-08-19": 10
     }
-  }
+  },
+  "users": [
+    {
+      "id": "usr-admin",
+      "email": "admin@example.com",
+      "passwordHash": "d8d4523f4848241795972a2022c9b9f8:718ab8138e99670313b769143be98556cf08a54589471f6e96a0eb38edd14955186f065af7e1bdddcecd42af7bc73850f14e7729768277c89a75dd94cda82278",
+      "role": "Super Admin",
+      "name": "System Admin"
+    },
+    {
+      "id": "usr-test",
+      "email": "test@example.com",
+      "passwordHash": "af3641af84d2d2f84be27068095832f8:2c8bf5b611cffde99e00773682c721ce8232463156dcd5c9d732cf74fa6e330bb990bf42fa28b5c1f64a0a55ca6bdf1fdf321b0d6060ff34fc94d76174183a23",
+      "role": "Test User",
+      "name": "QA Tester"
+    }
+  ]
 }

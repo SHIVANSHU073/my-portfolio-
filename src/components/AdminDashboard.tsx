@@ -909,6 +909,16 @@ export default function AdminDashboard({ token, onBackToPortfolio, onRefreshData
                 </div>
 
                 <div className="space-y-1.5">
+                  <label className="text-[10px] font-mono font-bold uppercase tracking-wider text-slate-400">Profile Photo URL / Path</label>
+                  <input
+                    type="text"
+                    value={profileForm.photoUrl}
+                    onChange={(e) => setProfileForm({ ...profileForm, photoUrl: e.target.value })}
+                    className="w-full px-4 py-3 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 text-sm focus:outline-none"
+                  />
+                </div>
+
+                <div className="space-y-1.5">
                   <label className="text-[10px] font-mono font-bold uppercase tracking-wider text-slate-400">Short Bio Intro</label>
                   <input
                     type="text"
